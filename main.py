@@ -10,34 +10,52 @@ class Window(Ui_MainWindow, QMainWindow):
         super().__init__()
 
         self.setupUi(self)
-        
 
         self.db = Db()
         self.db.create_database()
-        self.set_items()
         self.columns = self.db.get_columns()
         self.cell_editable = False
+        
+        self.filtrai = [
+            {'laukelis': self.filterby_vardas, 'stulpelis': 'vardas'}, 
+            {'laukelis': self.filterby_isvykimovieta, 'stulpelis': 'isvykimo_vieta'}, 
+            {'laukelis': self.filterby_atvykimovieta, 'stulpelis': 'atvykimo_vieta'}, 
+        ]
+
+        for filtras in self.filtrai:
+            filtras['laukelis'].textChanged.connect(self.set_items)
+
+        self.delete_all.clicked.connect(lambda: self.function_with_item_refresh())
+        self.delete_all.clicked.connect(self.delete_all_action)
         self.add_new.clicked.connect(self.validate_inputs)
-
-
         self.all_travels.cellDoubleClicked.connect(self.is_cell_editable)
-
-
-    
         self.all_travels.cellChanged.connect(self.update_item_value)
+        self.clear_filters.clicked.connect(self.clear_filters_action)
+
+        self.set_items()
 
 
-    def is_cell_editable(self):
-        print('DOUBLE CLICKED')
+    # Istrinami visi irasai
+    def delete_all_action(self):
+        self.db.delete_record(delete_all=True)
+        self.set_items()
+    
+    # Isvalomi filtru laukeliai
+    def clear_filters_action(self) -> None:
+        for filtras in self.filtrai:
+            filtras['laukelis'].setText('')
+
+    # Nustatoma ar laukelis redaguojamas
+    def is_cell_editable(self) -> None:
         self.cell_editable = True
     
-
-    def update_item_value(self, row, col):
+    # Paruosiama informacija duomenu bazes klases metodui
+    def update_item_value(self, row:int, col:int) -> None:
         if not self.cell_editable:
             return
 
         if self.all_travels.currentItem().text() == '':
-            print("Tuscias")
+            
             return 
 
         id = self.data[row][0]
@@ -45,12 +63,11 @@ class Window(Ui_MainWindow, QMainWindow):
         value = self.all_travels.currentItem().text()
 
         self.db.update_item(id, column_name, value)
-        # self.set_items()
+
         self.cell_editable = False
     
-
-    
-    def validate_inputs(self):
+    # Patikrinama ar pagrindines formos duomenys teisingai uzpildyti
+    def validate_inputs(self) -> None:
         data = self.get_values()
         errors = ''
         valid = True
@@ -58,34 +75,33 @@ class Window(Ui_MainWindow, QMainWindow):
             if value == '':
                 errors += f"Uzpildykite laukeli: {key.replace('_', ' ')}\n"
                 valid = False
+        
+        if valid:
+            for key, value in data.items():
+                if key == 'tel_nr':
+                    if any([letter.isalpha() for letter in value]):
+                        errors += f"Laukelis netinkamo formato: tel. nr.\n"
+                        valid = False
+
+                if key == 'el_pastas':
+                    if '@' not in value:
+                        errors += f"Laukelis netinkamo formato: el. pastas\n"
+                        valid = False
 
         if not valid:
             self.message.setText(errors)
             return
-
-        for key, value in data.items():
-            if key == 'tel_nr':
-                if any([letter.isalpha() for letter in value]):
-                    errors += f"Laukelis netinkamo formato: tel. nr.\n"
-                    valid = False
-
-            if key == 'el_pastas':
-                if '@' not in value:
-                    errors += f"Laukelis netinkamo formato: el. pastas\n"
-                    valid = False
-
         
         if not valid:
             self.message.setText(errors)
             return
 
-
         self.db.add_new_record(data)
         self.reset_form()
         self.set_items()
 
-
-    def get_values(self):
+    # Funkcija skirta gauti pagrindines formos reiksmes
+    def get_values(self) -> dict:
         vardas = self.new_vardas.text()
         pavarde = self.new_pavarde.text()
         el_pastas = self.new_elpastas.text()
@@ -102,8 +118,8 @@ class Window(Ui_MainWindow, QMainWindow):
             "atvykimo_vieta":atvykimo_vieta,
         }
     
-
-    def reset_form(self):
+    # Funkcija skirta atsatyti pagrindine forma i pradine busena
+    def reset_form(self) -> None:
         self.new_vardas.setText('')
         self.new_pavarde.setText('')
         self.new_elpastas.setText('')
@@ -112,29 +128,30 @@ class Window(Ui_MainWindow, QMainWindow):
         self.new_atvykimovieta.setText('')
         self.message.setText('')
 
-    def set_items(self):
-        self.data = self.db.get_records()
-        
+    # Funkcija skirta atvaizduoti duomenis lenteleje
+    def set_items(self) -> None:
+        self.data = self.db.get_records(self.filtrai)
         self.all_travels.setRowCount(len(self.data))
+        if len(self.data) == 0:
+            return
         for row_id, row_values in enumerate(self.data):
             for column_id, record in enumerate(row_values):
                 item = QTableWidgetItem(record)
                 self.all_travels.setItem(row_id, column_id-1, item)
-                # item.setText(str(record))
-            
+
             btn = QPushButton()
             self.all_travels.setCellWidget(row_id, 7, btn)
             btn.setText("Ištrinti")
             btn.clicked.connect(lambda checked, rid=row_values[0]: self.delete_action(rid))
 
             
-        
-    def delete_action(self, id):
+    # Funkcija skirta paruosti duomenis duomenu bazes klases istrinimo metodui
+    def delete_action(self, id:int) -> None:
         self.db.delete_record(id)
         self.set_items()
 
 
-
+# Aplikacijos paleidimas
 app = QApplication([])
 window = Window()
 window.show()
